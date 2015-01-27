@@ -2,7 +2,7 @@
 /**
 *represent a coordonate in 2 dimensional plan
 */
-Coord2D = function(){
+Vect2D = function(){
 	var x;
 	var y;
 	
@@ -28,266 +28,354 @@ Coord2D = function(){
 */
 Tray = function(){
 	/**
-	* coordinate of the tray
-	*/
+	 * the canvas to draw the tray on
+	 */
+	var displayCanvas;
+
+	/**
+	 * coordinate of the tray
+	 */
 	var position;
 	
 	/**
-	* size of the tray
-	*/
+	 * size of the tray
+	 */
 	var size;
 	
 	/**
-	* is the ball attached to the tray: i.e.:
-	waiting for un gamer click to move
-	*/
+	 * is the ball attached to the tray: i.e.:
+	 *waiting for un gamer click to move
+	 */
 	var isBallAttached;
 	
-	/**
-	* set the position of the tray.
-	*/
-	this.setPosition = function(xCoordinate, ball, canvasElement){
-		position.setX(xCoordinate - canvasElement.offsetLeft);
-		if(isBallAttached){
-			ball.getPosition().setX(position.getX());
+	return{
+		/**
+		 * set the position of the tray.
+		 */
+		setPosition: function(xCoordinate, ball, canvasElement){
+			xCoordinate -= canvasElement.offsetLeft;
+			if(xCoordinate < size.getX()/2){
+				xCoordinate = size.getX()/2;
+			}else if((canvasElement.width - xCoordinate) < size.getX()/2){
+				xCoordinate = canvasElement.width - size.getX()/2
+			}
+			position.setX(xCoordinate);
+			if(isBallAttached){
+				ball.getPosition().setX(position.getX());
+			}
+		},
+		/**
+		* initialize the tray position and lenght
+		*/
+		initialize: function(canvas,y, width, height){
+			displayCanvas = canvas;
+			position = new Vect2D();
+			position.setX(canvas.width / 2);
+			position.setY(y);
+			size = new Vect2D();
+			size.setX(width);
+			size.setY(height);
+			isBallAttached = true;
+		},
+	
+		getPosition: function(){
+			return position;
+		},
+	
+		getSize: function(){
+			return size;
+		},
+	
+		draw: function(){
+			var context = displayCanvas.getContext('2d');      
+			context.fillStyle = "rgb(150,29,28)";
+			context.fillRect (position.getX() - Math.round(size.getX()/2) , position.getY(),size.getX(),size.getY());
+			console.log("draw the tray at position ("+position.getX() +","+position.getY() +")");
+		},
+	
+		/**
+		* attach the ball to the tray
+		*/
+		attachBall: function(){
+			isBallAttached = true;
+		},
+	
+		/**
+		* unattach the ball to the tray
+		*/
+		unattachBall: function(){
+			isBallAttached = false;
+		},
+	
+		/**
+		* return true if the ball is attached to the tray, else false
+		*/
+		isBallAttached: function(){
+			return isBallAttached;
+		},
+
+		/**
+		 * detect a collision with the tray
+		 */
+		detectColisionWithTray : function(tempNextPosition, ball){
+			var result = false;
+			if(ball.getAngle() > 90 && ball.getAngle() < 270 && Math.floor(tempNextPosition.getY()) == position.getY() && Math.abs(tempNextPosition.getX() - position.getX()) <= size.getX()/2){
+				result = true;
+			}
+			return result;
+		},
+
+		/**
+		 * calcul and actualize the ball position and angle after a colision with the tray
+		 */
+		calculateRebonbWithTray : function(tempNextPosition, ball){
+			var impactX = ball.getPosition().getX() - position.getX();
+			var fractAngle = 160 / size.getX();
+			if(impactX > 0 ){
+				//impact on the left side of the tray
+				ball.setAngle(impactX * fractAngle);
+			}else if(impactX < 0 ){
+				ball.setAngle(360 + (impactX * fractAngle));
+			}else{
+				ball.setAngle(0);
+			}
 		}
 	};
-	/**
-	* initialize the tray position and lenght
-	*/
-	this.initialize = function(x,y, width, height){
-		position = new Coord2D();
-		position.setX(x);
-		position.setY(y);
-		size = new Coord2D();
-		size.setX(width);
-		size.setY(height);
-		isBallAttached = true;
-	};
-	
-	this.getPosition = function(){
-		return position;
-	};
-	
-	this.getSize = function(){
-		return size;
-	};
-	
-	this.draw = function(canvas){
-		var context = canvas.getContext('2d');      
-		context.fillStyle = "rgb(150,29,28)";
-		context.fillRect (position.getX(),canvas.height - position.getY(),size.getX(),size.getY());
-		console.log("draw the tray at position ("+position.getX() +","+position.getY() +")");
-	};
-	
-	/**
-	* attach the ball to the tray
-	*/
-	this.attachBall = function(){
-		isBallAttached = true;
-	}
-	
-	/**
-	* unattach the ball to the tray
-	*/
-	this.unattachBall = function(){
-		isBallAttached = false;
-	}
-	
-	/**
-	* return true if the ball is attached to the tray, else false
-	*/
-	this.isBallAttached=function(){
-		return isBallAttached;
-	}
 };
 
 Level = function(){
 	
 	/**
-	* the level canvcas
-	*/	
-	var canvas;
+	 * the brick grid: the contained element represent the bricks (0 : empty, 1: brick)
+	 */
+	var grid;
+
+	/**
+	 * the level canvcas (the one to be drawn on)
+	 */	
+	var displayCanvas;
 	
 	/**
-	* the original canvcas
-	*/	
-	var originalCanvasSave;
+	 * the original canvcas (to help restoring canvas part when wrick desappear)
+	 */	
+	var bufferCanvas;
 	
 	/**
-	* the brick border width
-	*/
-	var brickBorderWidth = 1;
-	/**
-	* the width of the brick
-	*/
+	 * the width of the brick
+	 */
 	var brickWidth;
 	/**
-	* the height of the brick
-	*/
+	 * the height of the brick
+	 */
 	var brickHeight;
 	
 	/**
-	* the brick pixel value
-	*/
-	var brickRedColorValue=0;
+	 * the number of brick which may contain the grid
+	 */
+	var gridWidth;
+
+	var gridHeight;
+
+	var numberOfBrick;
+
+	/**
+	 * the brick pixel value
+	 */
+	var brickRedColorValue=255;
 	var brickGreenColorValue=255;
 	var brickBlueColorValue=255;
 	
 	/**
-	* the brick border color value
-	*/
+	 * the brick border color value
+	 */
 	var brickBorderRedColorValue=0;
-	var brickBorderGreenColorValue=255;
+	var brickBorderGreenColorValue=0;
 	var brickBorderBlueColorValue=0;
 
 	/**
-	* initialize a level canvas
-	*/	
-	this.initializeRandom = function(brickWidth, brickHeight){
-		//draw the bricks
-		for(var x = 0; x < canvas.width; x+=brickWidth){
-			//starting verticaly from middle height
-			for(var y = canvas.height/2; y < canvas.height; y+=brickHeight){
-				context = canvas.getContext('2d');
-				context.beginPath();
-				context.rect(x, canvas.height -y,  brickWidth,-brickHeight);
-				context.fillStyle = 'rgb('+brickRedColorValue+','+brickGreenColorValue+','+brickBlueColorValue+')';
-				context.fill();
-				context.lineWidth = brickBorderWidth;
-				context.strokeStyle ='rgb('+brickBorderRedColorValue+','+brickBorderGreenColorValue+','+brickBorderBlueColorValue+')';
-				context.stroke();
-			}	
-		}
-	};
-
-
+	 * the brick border width
+	 */
+	var brickBorderWidth = 1;
+	
 	/**
-	* initialize the level
+	* create the buffer canvas from the size of the original canvas used for display
 	*/
-	this.initialize=function(canvasForCalcul,brickWidthparameter, brickHeightParameter){
-		originalCanvasSave =createBufferCanvasFronDisplayCanvas(canvasForCalcul);
-		canvas= canvasForCalcul;
-		brickWidth = brickWidthparameter;
-		brickHeight = brickHeightParameter;
-		this.initializeRandom(brickWidth, brickHeight);
-	};
-	
-	
-	
-	//remove a brick from the canvas
-	this.removeBrick= function(x,y){
-		context = canvas.getContext('2d');
-		var pixel = context.getImageData(x,canvas.height-y,1,1).data;
-		var tempPixel;
-		var minX;
-		var minY;
-		for(minX = x; minX >= 0 ; minX--){
-			tempPixel = context.getImageData(minX,canvas.height- y,1,1).data;
-			if(tempPixel[0] != pixel[0] || tempPixel[1] != pixel[1] || tempPixel[2] != pixel[2]){
-				break;
-			}
-		}
-		for(minY = y; minY <= canvas.height ; minY++){
-			tempPixel = context.getImageData(x,canvas.height- minY,1,1).data;
-			if(tempPixel[0] != pixel[0] || tempPixel[1] != pixel[1] || tempPixel[2] != pixel[2]){
-				break;
-			}
-		}
-		context.drawImage(originalCanvasSave,minX, canvas.height - minY,brickWidth,brickHeight,minX, canvas.height - minY,brickWidth,brickHeight);
-	};
-
-	/**
-	* detect colision with brick
-	*/
-	this.detectColisionWithBrick = function(tempNextPosition){
-		var result = false;
-		context = canvas.getContext('2d');
-		var pixel = context.getImageData(tempNextPosition.getX(),canvas.height-tempNextPosition.getY(),1,1).data;
-		if(pixel[0] ==  brickBorderRedColorValue && pixel[1] == brickBorderGreenColorValue && pixel[2] == brickBorderBlueColorValue){
-			result = true;
-		}
+	function createBufferCanvas(displayCanvas){
+		var result = document.createElement('canvas');
+		result.width = displayCanvas.width;
+		result.height = displayCanvas.height;
+		result.getContext("2d").fillStyle = "rgb(70,29,234)";
+		result.getContext("2d").fillRect (0,0,result.width,result.height );
 		return result;
-	};
+	}
+	
+	
+	return {
+		/**
+		 * initialize the level
+		 */
+		initialize: function(htmlCanvasElement,brickWidthparameter, brickHeightParameter, gridWidthParameter, gridHeightParameter){
+			//resize the HTML canvas element
+			htmlCanvasElement.width = brickWidthparameter*gridWidthParameter;
+			// we add 3 grid unit to left some place for the tray
+			htmlCanvasElement.height = brickHeightParameter*(gridHeightParameter+2);
+			bufferCanvas = createBufferCanvas(htmlCanvasElement);
+			displayCanvas= htmlCanvasElement;
+			brickWidth = brickWidthparameter;
+			brickHeight = brickHeightParameter;
+			gridWidth = gridWidthParameter;
+			gridHeight = gridHeightParameter;
+			this.initializeRandom(bufferCanvas);
+		},
+	
+		/**
+		 * initialize a random level canvas (for now, just fill the half upper-part with bricks)
+		 */	
+		initializeRandom: function(bufferCanvas){
+			//draw the bricks
+			grid = [];
+			numberOfBrick = 0;
+			for(var x = 0; x < gridWidth; x++){
+				grid[x] = [];
+				for(var y =0; y < gridHeight; y++){
+					if(y < gridHeight / 2){
+						//only fill the upper part with bricks
+						grid[x][y] = 1;
+						numberOfBrick++;
+						context = bufferCanvas.getContext('2d');
+						context.beginPath();
+						context.rect(x*brickWidth, y*brickHeight, brickWidth, brickHeight);
+						context.fillStyle = 'rgb('+brickRedColorValue+','+brickGreenColorValue+','+brickBlueColorValue+')';
+						context.fill();
+						context.strokeStyle ='rgb('+brickBorderRedColorValue+','+brickBorderGreenColorValue+','+brickBorderBlueColorValue+')';
+						context.stroke();
+					}else{
+						grid[x][y] = 0;
+					}
+				}	
+			}
+		},
 
-	this.calculateRebondWithBrick = function(tempNextPosition, ball){
-		var emptyLeft;
-		var emptyRight;
-		var emptyTop;
-		var emptyBottom;		
-		var tempPixel = context.getImageData(tempNextPosition.getX()-1,canvas.height-tempNextPosition.getY(),1,1).data;	
-		if(tempPixel[0] ==  brickBorderRedColorValue && tempPixel[1] == brickBorderGreenColorValue && tempPixel[2] == brickBorderBlueColorValue){
-			emptyLeft = false;
-		}else{
-			emptyLeft = true;
-		}
-		tempPixel = context.getImageData(tempNextPosition.getX()+1,canvas.height-tempNextPosition.getY(),1,1).data;	
-		if(tempPixel[0] ==  brickBorderRedColorValue && tempPixel[1] == brickBorderGreenColorValue && tempPixel[2] == brickBorderBlueColorValue){
-			emptyRight = false;
-		}else{
-			emptyRight = true;
-		}
-		tempPixel = context.getImageData(tempNextPosition.getX(),canvas.height-tempNextPosition.getY()-1,1,1).data;	
-		if(tempPixel[0] ==  brickBorderRedColorValue && tempPixel[1] == brickBorderGreenColorValue && tempPixel[2] == brickBorderBlueColorValue){
-			emptyTop = false;
-		}else{
-			emptyTop = true;
-		}
-		tempPixel = context.getImageData(tempNextPosition.getX()+1,canvas.height-tempNextPosition.getY()+1,1,1).data;	
-		if(tempPixel[0] ==  brickBorderRedColorValue && tempPixel[1] == brickBorderGreenColorValue && tempPixel[2] == brickBorderBlueColorValue){
-			emptyBottom = false;
-		}else{
-			emptyBottom = true;
-		}
-		if(emptyLeft){
-			if(emptyTop){
-				//left-top corner
-				ball.setAngle(315);
-			}else if(emptyBottom){
-				//left-bottom corner
-				ball.setAngle(225);
+		getNumberOfBrick : function(){
+			return numberOfBrick;
+		},
+
+		/**
+		 * copy the buffer canvas into the display canvas
+		 */
+		draw: function(){
+			displayCanvas.getContext("2d").drawImage(bufferCanvas,0,0,displayCanvas.width,displayCanvas.height);
+		},
+
+		//remove a brick from the canvas
+		removeBrick: function(position){
+			var xBrick = Math.floor(position.getX()/brickWidth);
+			var yBrick = Math.floor(position.getY()/brickHeight);
+			grid[xBrick][yBrick] = 0;
+			numberOfBrick--;
+			var canvasXPosition = (xBrick*brickWidth)+1;
+			var canvasYPosition = (yBrick*brickHeight)+1;
+			context = bufferCanvas.getContext('2d');
+			context.beginPath();
+			context.rect(canvasXPosition, canvasYPosition, brickWidth, brickHeight);
+			context.fillStyle = "rgb(70,29,234)";
+			context.fill();
+			context.strokeStyle ="rgb(70,29,234)";
+			context.stroke();
+		},
+
+		/**
+		* detect colision with brick
+		*/
+		detectColisionWithBrick: function(tempNextPosition){
+			var xBrick = Math.floor(tempNextPosition.getX() / brickWidth);
+			var yBrick = Math.floor(tempNextPosition.getY() / brickHeight);
+			var result = false;
+			if(grid[xBrick][yBrick] == 1){
+				result = true;
+			}
+			return result;
+		},
+
+		calculateRebondWithBrick: function(tempNextPosition, ball){
+			if(tempNextPosition.getX() == ball.getPosition().getX()){
+				if(ball.getAngle() <=180){
+					ball.setAngle(180 - ball.getAngle());
+				}else{
+					ball.setAngle(540-ball.getAngle());
+				}
+			}else if(tempNextPosition.getY() == ball.getPosition().getY()){
+				ball.setAngle(360-ball.getAngle());
 			}else{
-				//left side
+				if(tempNextPosition.getX() % brickWidth != 0){
+					if(ball.getAngle() <=180){
+						ball.setAngle(180 - ball.getAngle());
+					}else{
+						ball.setAngle(540-ball.getAngle());
+					}
+				}else if(tempNextPosition.getY() % brickHeight != 0){
+					ball.setAngle(360-ball.getAngle());
+				}else{
+					ball.setAngle((ball.getAngle()+180)%360);
+				}
+			}
+		},
+
+		/**
+		 * detect collision with the border
+		 */
+		detectColisionWithBorder: function(tempNextPosition){
+			var result = false;
+			if(tempNextPosition.getX() <= 0  || tempNextPosition.getX() >= gridWidth*brickWidth || tempNextPosition.getY() <= 0){
+				result = true;
+			}
+			return result;
+		},
+
+		/**
+		 * detect collision with the bottom border
+		 */
+		detectColisionWithBottomBorder: function(tempNextPosition){
+			var result = false;
+			if(tempNextPosition.getY() >=  (gridHeight+1)*brickHeight){
+				result = true;
+			}
+			return result;
+		},
+
+		/**
+		 * calcul and actualize the ball position and angle after a colision with the border
+		*/	
+		caculateRebondWithBorder: function(tempNextPosition, ball){
+			//collision with left border
+			if(tempNextPosition.getX() <= 0){
+				//180 < angle < 360
+				ball.setAngle(360 - ball.getAngle());
+			} //collision with right border
+			else if(tempNextPosition.getX() >= gridWidth*brickWidth){
+				// 0 < angle < 180
 				if(ball.getAngle() < 90){
-					ball.setAngle(360 - (90 - ball.getAngle()));
+					ball.setAngle(270 + ball.getAngle());
 				}else{
-					ball.setAngle(270 - (ball.getAngle() -90));
+					ball.setAngle(360 - ball.getAngle());
+				}
+			}//collision with top
+			else if(tempNextPosition.getY() <= 0){
+				// 270 < angle <360 ou 0 < angle < 90
+				if(ball.getAngle() < 90){
+					ball.setAngle(180 - ball.getAngle());
+				}else{
+					ball.setAngle(540 - ball.getAngle());
 				}
 			}
-		}else if(emptyRight){
-			if(emptyTop){
-				//right-top corner
-				ball.setAngle(45);
-			}else if(emptyBottom){
-				//right-bottom corner
-				ball.setAngle(135);
-			}else{
-				//right side
-				if(ball.getAngle() > 270){
-					ball.setAngle(90 - (ball.getAngle() -270));
-				}else{
-					ball.setAngle(90 + (270 -ball.getAngle()));
-				}
-			}
-		}else if(emptyTop){
-			//top side
-			if(ball.getAngle() > 180){
-				ball.setAngle(360-(ball.getAngle()-180));
-			}else{
-				ball.setAngle(180 - ball.getAngle());
-			}
-		}else if(emptyBottom){
-			//bottom side
-			if(ball.getAngle() < 90){
-				ball.setAngle(180 - ball.getAngle());
-			}else{
-				ball.setAngle(180 + (360 - ball.getAngle()));
-			}
+		},
+
+		displayMessage : function(text){
+			var ctx = displayCanvas.getContext("2d");
+			ctx.font="bold 40px Georgia";
+			ctx.fillText(text,10,displayCanvas.height/2);
 		}
-		this.removeBrick(tempNextPosition.getX(),tempNextPosition.getY());
-
 	};
-
 };
 
 /**
@@ -296,87 +384,100 @@ Level = function(){
 Ball = function(){
 	
 	/**
-	* the coordinate of the ball
-	*/
+	 * the coordinate of the ball
+	 */
 	var position;
 	
 	/**
-	* the angle of the ball from the normal (in degree)
-	*/
+	 * the angle of the ball from the normal (in degree)
+	 */
 	var angle;
 	
 	/**
-	* the ball speed
-	*/
+	 * the ball speed
+	 */
 	var speed;
 	
 	/**
-	* the radius of the ball
-	*/
+	 * the radius of the ball
+	 */
+	
 	var size;
 	/**
-	* instantiate ther ball vector and position
-	*/
-	this.initialize = function(x,y,radius, angleParameter,speedParameter){
-		position=new Coord2D();
-		position.setX(x);
-		position.setY(y);
-		size = radius;
-		angle=angleParameter;		
-		speed = speedParameter;
-	};
-	
-	/**
-	* return the ball 2D vector
-	*/
-	this.getAngle = function(){
-		return angle;
-	};
-	
-	/**
-	* return the ball position
-	*/
-	this.getPosition = function(){
-		return position;
-	};
-	
-	/**
-	* draw the ball on the canvas
-	*/
-	this.draw = function(canvas){
-		var context = canvas.getContext('2d');
-		context.fillStyle = "rgb(29,150,28)";
-		context.fillRect (position.getX()-size,canvas.height - position.getY()-size,size,size);
-		console.log("draw the ball at position: ("+position.getX() +","+position.getY() +")");
-	};
-	
-	/**
-	* return the ball speed
-	*/
-	this.getSpeed = function(){
-		return speed;
-	}
+	 * instantiate ther ball vector and position
+	 */
 
 	/**
-	* set the angle
-	*/
-	this.setAngle = function(angleParameter){
-		angle = angleParameter;
-	};
+	 * the display canvas to draw the ball on
+	 */
+	var displayCanvas;
+
+	return{
+
+		initialize : function(canvas, x, y, radius, angleParameter, speedParameter){
+			position=new Vect2D();
+			position.setX(x);
+			position.setY(y);
+			size = radius;
+			angle=angleParameter;		
+			speed = speedParameter;
+			displayCanvas = canvas;
+		},
 	
-	/**
-	* set the ball position
-	*/
-	this.setPosition = function(x, y){
-		position.setX(x);
-		position.setY(y);
-	}
+		/**
+		* return the ball 2D vector
+		*/
+		getAngle: function(){
+			return angle;
+		},
+	
+		/**
+		* return the ball position
+		*/
+		getPosition: function(){
+			return position;
+		},
+		
+		/**
+		* draw the ball on the canvas
+		*/
+		draw: function(){
+			var context = displayCanvas.getContext('2d');
+			context.beginPath();
+			context.arc(position.getX(), position.getY(), size, 0, 2 * Math.PI);
+			context.fillStyle = 'rgb(29,150,28)';
+			context.fill();
+			console.log("draw the ball at position: ("+position.getX() +","+position.getY() +")");
+		},
+	
+		/**
+		 * return the ball speed
+		 */
+		getSpeed: function(){
+			return speed;
+		},
+
+		/**
+		 * set the angle
+		 */
+		setAngle: function(angleParameter){
+			angle = angleParameter;
+		},
+		
+		/**
+		 * set the ball position
+		 */
+		setPosition: function(x, y){
+			position.setX(x);
+			position.setY(y);
+		}
+	};
 };
 
 /**
 * representation of the ball
 */
-game = function(canvas){
+Game = function(displayCanvas){
 
 	/**
 	* the ball
@@ -394,16 +495,6 @@ game = function(canvas){
 	var level;
 	
 	/**
-	* the background canvas use for game logic
-	*/
-	var backgroudCanvas;
-	
-	/**
-	* the canvas used for displaying
-	*/
-	var displayCanvas;
-	
-	/**
 	* define uf the player loose the party
 	*/
 	var loose = false;
@@ -412,11 +503,25 @@ game = function(canvas){
 	* define uf the player win the party
 	*/
 	var win = false;
+
+	/**
+	 * timer used in the main loop
+	 */
+	var timer;
+
+	/**
+	 * initialize the environment
+	 * move the ball and refresh the canvas
+	 */
+	initialize = function(displayCanvas, refreshPeriod){
+		setMouseListenerOnCanvas(displayCanvas);
+		timer=setInterval(function(){mainLoop();},refreshPeriod);
+	}
 	
 	/**
-	* move the ball to its next atomic position.
-	*/
-	moveBall = function(canvasForCalcul){
+	 * move the ball to its next atomic position.
+	 */
+	animate = function(){
 		//var approximationError =0;
 		var cumulDistance = 0;
 		var fromX;
@@ -424,15 +529,14 @@ game = function(canvas){
 		var distanceX;
 		var distanceY;
 		var tempNextPosition;
-		var approximationError;
+		var approximationError = 0;
 		while(cumulDistance < ball.getSpeed()){
 			//the temp next position for detecting colision
 			fromX = ball.getPosition().getX();
 			fromY = ball.getPosition().getY();
 			distanceX = Math.sin(ball.getAngle()* Math.PI / 180)* ball.getSpeed();
 			distanceY = Math.cos(ball.getAngle()* Math.PI / 180)* ball.getSpeed();
-			tempNextPosition = new Coord2D();
-			approximationError = 0;			
+			tempNextPosition = new Vect2D();
 			if(Math.abs(distanceX) > Math.abs(distanceY)){
 				if(distanceX > 0){
 					tempNextPosition.setX(fromX+1);		
@@ -440,18 +544,20 @@ game = function(canvas){
 					tempNextPosition.setX(fromX-1);	
 				}
 				approximationError += Math.abs(distanceY) / Math.abs(distanceX);
+				approximationError %= 1;
 				if(distanceY > 0){
-					tempNextPosition.setY(Math.round(fromY+approximationError));		
+					tempNextPosition.setY(Math.round(fromY-approximationError));		
 				}else{
-					tempNextPosition.setY(Math.round(fromY-approximationError));	
+					tempNextPosition.setY(Math.round(fromY+approximationError));	
 				}
 			}else{
 				if(distanceY > 0){
-					tempNextPosition.setY(fromY+1);		
+					tempNextPosition.setY(fromY-1);		
 				}else{
-					tempNextPosition.setY(fromY-1);	
+					tempNextPosition.setY(fromY+1);	
 				}
 				approximationError += Math.abs(distanceX) / Math.abs(distanceY);
+				approximationError %= 1;
 				if(distanceX > 0){
 					tempNextPosition.setX(Math.round(fromX+approximationError));		
 				}else{
@@ -459,153 +565,83 @@ game = function(canvas){
 				}
 			}
 			//the real next position of the ball to calculate	
-			if(detectColisionWithTray(tempNextPosition, tray)){
-				calculateRebonbWithTray(tempNextPosition, tray);
-			}else if(detectColisionWithBorder(tempNextPosition, canvasForCalcul)){
-				caculateRebondWithBorder(tempNextPosition, canvasForCalcul);		
-			}else if(detectColisionWithBrick(tempNextPosition, canvasForCalcul)){
-				calculateRebondWithBrick(tempNextPosition, canvasForCalcul);		
+			if(tray.detectColisionWithTray(tempNextPosition, ball)){
+				tray.calculateRebonbWithTray(tempNextPosition,ball);
+			}else if(level.detectColisionWithBorder(tempNextPosition)){
+				level.caculateRebondWithBorder(tempNextPosition, ball);		
+			}else if(level.detectColisionWithBrick(tempNextPosition)){
+				level.calculateRebondWithBrick(tempNextPosition, ball);
+				level.removeBrick(tempNextPosition);
 			}else{
 				cumulDistance++;
 				ball.setPosition(tempNextPosition.getX(), tempNextPosition.getY());
 			}
-			checkLoose();
-			checkWin();
+			checkLoose(tempNextPosition, level);
+			checkWin(level);
+			if(loose || win){
+				break;
+			}
 		}
 	};
+
+
 	
 
 	/**
-	* detect a collision with the tray
-	*/
-	detectColisionWithTray=function(tempNextPosition,tray){
-		var result = false;
-		if(ball.getAngle() > 90 && ball.getAngle() < 270 && Math.floor(tempNextPosition.getY()) == tray.getPosition().getY() && tempNextPosition.getX() >= tray.getPosition().getX()  && tempNextPosition.getX() <= tray.getPosition().getX()+tray.getSize().getX()){
-			result = true;
-		}
-		return result;
-	};
-	
-	/**
-	* calcul and actualize the ball position and angle after a colision with the tray
-	*/
-	calculateRebonbWithTray=function(tempNextPosition, tray){
-			var ballFract = (ball.getPosition().getX() - tray.getPosition().getX())+1;
-			var fractAngle = 160 / tray.getSize().getX();
-			var newAngle = ((ballFract * fractAngle) +270) % 360;
-			ball.setAngle(newAngle);
-	};
-
-	/**
-	* detect collision with the border
-	*/
-	detectColisionWithBorder=function(tempNextPosition, canvasForCalcul){
-		var result = false;
-		if(tempNextPosition.getX() <= 0  || tempNextPosition.getX() >= canvasForCalcul.width || tempNextPosition.getY()  >= canvasForCalcul.height ){
-			result = true;
-		}
-		return result;
-	};
-
-	/**
-	* calcul and actualize the ball position and angle after a colision with the border
-	*/	
-	caculateRebondWithBorder=function(tempNextPosition, canvasForCalcul){
-		//collision with left border
-		if(tempNextPosition.getX() <= 0){
-			//180 < angle < 360
-			if(ball.getAngle() > 270){
-				ball.setAngle(90 - (ball.getAngle() -270));
-			}else{
-				ball.setAngle(90 + (270 -ball.getAngle()));
-			}
-		
-		} //collision with right border
-		else if(tempNextPosition.getX() >= canvasForCalcul.width){
-			// 0 < angle < 180
-			if(ball.getAngle() < 90){
-				ball.setAngle(360 - (90 - ball.getAngle()));
-			}else{
-				ball.setAngle(270 - (ball.getAngle() -90));
-			}
-		}//collision with top
-		else if(tempNextPosition.getY() >= canvasForCalcul.height){
-			// 270 < angle <360 ou 0 < angle < 90
-			if(ball.getAngle() < 90){
-				ball.setAngle(180 - ball.getAngle());
-			}else{
-				ball.setAngle(180 + (360 - ball.getAngle()));
-			}
-		}
-		
-	};
-
-	/**
-	* detect colision with brick
-	*/
-	detectColisionWithBrick= function(tempNextPosition, canvasForCalcul){
-		return level.detectColisionWithBrick(tempNextPosition);
-	};	
-
-	/**
-	* calcul and actualize the ball position and angle after a colision with a brick
-	*/
-	calculateRebondWithBrick= function(tempNextPosition, canvasForCalcul){
-		return level.calculateRebondWithBrick(tempNextPosition,ball);
-	};
-
-	/**
-	*move the ball to its next displayPosition
-	*/
-	animate = function(backgroundCanvas,displayCanvas){
+	 * move the ball to its next displayPosition
+	 */
+	mainLoop = function(){
 		if(tray.isBallAttached() == false){
-			moveBall(backgroundCanvas);
+			animate();
 		}
-		refreshCanvasForDisplay(backgroundCanvas,displayCanvas);
-	};
-	
-	/**
-	* verify if the use has lost
-	*/
-	checkLoose = function(){
-	};
-	
-	/**
-	* verify if the user won
-	*/
-	checkWin = function(){
-	};
-	
-	/**
-	* display the canvasForCalcul in the canvas for display, and add
-	* the ball and the tray by using their position
-	*/
-	refreshCanvasForDisplay = function(backgroundCanvas,displayCanvas){
-		//draw the environment
-		displayCanvas.getContext("2d").drawImage(backgroundCanvas,0,0,displayCanvas.width,displayCanvas.height);
-		//draw the tray
-		tray.draw(displayCanvas);
-		//draw the ball
-		ball.draw(displayCanvas);
-	};
-	
-	initialize = function(backgroundCanvas,displayCanvas){
-		setMouseListenerOnCanvas(displayCanvas);
-	};
-	
-	/**
-	* initialize the environment
-	* move the ball and refresh the canvas
-	*/
-	mainLoop = function(backgroundCanvas,displayCanvas, refreshPeriod){
-		initialize(backgroundCanvas,displayCanvas);		
-		myVar=setInterval(function(){animate(backgroundCanvas,displayCanvas);},refreshPeriod);
+		if (loose) {
+			clearInterval(timer);
+			level.displayMessage('you loose');
+		}else if(win){
+			clearInterval(timer);
+			level.displayMessage('you win!');
+		}else{
+			paint();
+		}
 		
 	};
-	
+
 	/**
-	* listen to the mouse move on the canvas 
-	*/
+	 * verify if the use has lost
+	 */
+	checkLoose = function(tempNextPosition, level){
+		if(level.detectColisionWithBottomBorder(tempNextPosition)){
+			loose = true;
+		}
+	};
+
+	/**
+	 * verify if the user won
+	 */
+	checkWin = function(level){
+		if(level.getNumberOfBrick() == 0){
+			win = true;
+		}
+	};
+
+	/**
+	 * display the canvasForCalcul in the canvas for display, and add
+	 * the ball and the tray by using their position
+	 */
+	paint = function(){
+		//draw the environment
+		level.draw();
+		//draw the tray
+		tray.draw();
+		//draw the ball
+		ball.draw();
+	};
+
+	
+
+	/**
+	 * listen to the mouse move on the canvas 
+	 */
 	setMouseListenerOnCanvas = function(displayCanvas){
 		displayCanvas.onmousemove = function(event){
 			//modify the position of the tray according to the mouse position
@@ -616,28 +652,33 @@ game = function(canvas){
 			tray.unattachBall();			
 		}
 	};
-	
-	/**
-	* create the buffer canvas from the size of the original canvas used for display
-	*/
-	createBufferCanvasFronDisplayCanvas = function(displayCanvas){
-		var backgroundCanvas = document.createElement('canvas');
-		backgroundCanvas.width = displayCanvas.width;
-		backgroundCanvas.height = displayCanvas.height;
-		backgroundCanvas.getContext("2d").fillStyle = "rgb(70,29,234)";
-		backgroundCanvas.getContext("2d").fillRect (0,0,backgroundCanvas.width,backgroundCanvas.height );
-		return backgroundCanvas;
-	}
-	
-	
-	displayCanvas = canvas;
-	backgroundCanvas = createBufferCanvasFronDisplayCanvas(displayCanvas);	
+
+	revive = function(){
+		loose = false;
+		tray = new Tray();
+		tray.initialize(displayCanvas, gridHeight*gridOffsetHeight, trayWidth,trayHeight);
+		ball = new Ball();
+		ball.initialize(displayCanvas,tray.getPosition().getX()+(tray.getSize()/2),tray.getPosition().getY(), ballRadius, ballAngle, ballSpeed);
+		initialize(displayCanvas,refreshTimeMs);
+	};
+
+	var gridHeight = 10;
+	var gridWidth = 10;
+	var gridOffsetHeight = 24;
+	var gridOffsetWidth = 40;
+	var refreshTimeMs = 50;
+	var trayWidth = 40;
+	var trayHeight = 5;
+	var ballRadius = 3;
+	var ballAngle = 45;
+	var ballSpeed = 5;
 	level = new Level();
-	level.initialize(backgroundCanvas,15,10);
+	level.initialize(displayCanvas,gridOffsetWidth,gridOffsetHeight, gridWidth, gridHeight);
 	tray = new Tray();
-	tray.initialize(displayCanvas.width / 2, 30, 40,5);
+	tray.initialize(displayCanvas, gridHeight*gridOffsetHeight, trayWidth,trayHeight);
 	ball = new Ball();
-	ball.initialize(tray.getPosition().getX()+(tray.getSize()/2),tray.getPosition().getY(), 5,45,5);
-	mainLoop(backgroundCanvas, displayCanvas,50);
+	ball.initialize(displayCanvas,tray.getPosition().getX()+(tray.getSize()/2),tray.getPosition().getY(), ballRadius, ballAngle, ballSpeed);
+	initialize(displayCanvas,refreshTimeMs);
+	
 }
 

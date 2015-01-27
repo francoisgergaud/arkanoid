@@ -10,7 +10,13 @@
 		</canvas>
 		<script type="text/javascript">
 			var canvas = document.getElementById("brikWallCanvas");
-			var game = new game(canvas);
+			var game = new Game(canvas);
+
+			function revive(){
+				game.revive();
+			}
+			
 		</script>
+		<a onclick="revive(); return false;">Revive</a>
 	</body>
 </html>
